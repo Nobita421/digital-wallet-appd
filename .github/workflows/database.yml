@@ -1,0 +1,93 @@
+name: Database Management
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Database action'
+        required: true
+        default: 'migrate'
+        type: choice
+        options:
+        - migrate
+        - seed
+        - reset
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+jobs:
+  database-action:
+    name: Database ${{ github.event.inputs.action }}
+    runs-on: ubuntu-latest
+    
+    environment: ${{ github.event.inputs.environment }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Generate Prisma client
+      run: npx prisma generate
+
+    - name: Execute database action
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets[format('{0}_HOST', upper(github.event.inputs.environment))] }}
+        username: ${{ secrets[format('{0}_USER', upper(github.event.inputs.environment))] }}
+        key: ${{ secrets[format('{0}_SSH_KEY', upper(github.event.inputs.environment))] }}
+        script: |
+          cd /opt/digital-wallet-app
+          
+          # Set environment variables
+          export NODE_ENV=${{ github.event.inputs.environment }}
+          export DATABASE_URL=${{ secrets[format('{0}_DATABASE_URL', upper(github.event.inputs.environment))] }}
+          
+          # Execute the requested action
+          case "${{ github.event.inputs.action }}" in
+            "migrate")
+              echo "Running database migrations..."
+              npx prisma migrate deploy
+              ;;
+            "seed")
+              echo "Seeding database..."
+              npx tsx src/lib/seed.ts
+              ;;
+            "reset")
+              echo "Resetting database..."
+              npx prisma migrate reset --force
+              npx tsx src/lib/seed.ts
+              ;;
+          esac
+
+    - name: Create database backup (production only)
+      if: github.event.inputs.environment == 'production' && github.event.inputs.action == 'migrate'
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.PRODUCTION_HOST }}
+        username: ${{ secrets.PRODUCTION_USER }}
+        key: ${{ secrets.PRODUCTION_SSH_KEY }}
+        script: |
+          cd /opt/digital-wallet-app
+          BACKUP_DIR="./backups"
+          mkdir -p $BACKUP_DIR
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          sqlite3 data/dev.db ".backup $BACKUP_DIR/backup_$TIMESTAMP.db"
+          echo "Database backup created: backup_$TIMESTAMP.db"
+          
+          # Keep only last 7 days of backups
+          find $BACKUP_DIR -name "backup_*.db" -mtime +7 -delete

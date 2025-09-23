@@ -1,0 +1,159 @@
+name: Application Monitoring
+
+on:
+  schedule:
+    # Run every 5 minutes
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    name: Health Check
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        environment: [staging, production]
+    
+    steps:
+    - name: Check application health
+      run: |
+        # Get the appropriate host based on environment
+        if [ "${{ matrix.environment }}" == "staging" ]; then
+          HOST="${{ secrets.STAGING_URL }}"
+        else
+          HOST="${{ secrets.PRODUCTION_URL }}"
+        fi
+        
+        # Check if the application is responding
+        response=$(curl -s -o /dev/null -w "%{http_code}" $HOST || echo "000")
+        
+        if [ "$response" -eq 200 ]; then
+          echo "✅ $HOST is healthy (HTTP $response)"
+        else
+          echo "❌ $HOST is unhealthy (HTTP $response)"
+          exit 1
+        fi
+
+    - name: Check API endpoints
+      run: |
+        if [ "${{ matrix.environment }}" == "staging" ]; then
+          HOST="${{ secrets.STAGING_URL }}"
+        else
+          HOST="${{ secrets.PRODUCTION_URL }}"
+        fi
+        
+        # Check health endpoint
+        health_response=$(curl -s -o /dev/null -w "%{http_code}" "$HOST/api/health" || echo "000")
+        
+        if [ "$health_response" -eq 200 ]; then
+          echo "✅ Health endpoint is responding"
+        else
+          echo "❌ Health endpoint failed (HTTP $health_response)"
+          exit 1
+        fi
+
+    - name: Check response time
+      run: |
+        if [ "${{ matrix.environment }}" == "staging" ]; then
+          HOST="${{ secrets.STAGING_URL }}"
+        else
+          HOST="${{ secrets.PRODUCTION_URL }}"
+        fi
+        
+        # Measure response time
+        response_time=$(curl -o /dev/null -s -w '%{time_total}' "$HOST" || echo "10.0")
+        
+        # Convert to integer for comparison
+        response_int=$(echo "$response_time * 1000" | bc | cut -d. -f1)
+        
+        if [ "$response_int" -le 5000 ]; then
+          echo "✅ Response time is acceptable (${response_time}s)"
+        else
+          echo "⚠️ Response time is slow (${response_time}s)"
+          # Don't fail the workflow, just warn
+        fi
+
+    - name: Notify on failure
+      if: failure()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#alerts'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+
+  ssl-check:
+    name: SSL Certificate Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check SSL certificate expiry
+      run: |
+        domains=("${{ secrets.PRODUCTION_DOMAIN }}" "${{ secrets.STAGING_DOMAIN }}")
+        
+        for domain in "${domains[@]}"; do
+          if [ ! -z "$domain" ]; then
+            echo "Checking SSL certificate for $domain"
+            
+            # Get certificate expiry date
+            expiry_date=$(echo | openssl s_client -servername $domain -connect $domain:443 2>/dev/null | openssl x509 -noout -dates | grep notAfter | cut -d= -f2)
+            
+            if [ ! -z "$expiry_date" ]; then
+              # Convert to timestamp
+              expiry_timestamp=$(date -d "$expiry_date" +%s)
+              current_timestamp=$(date +%s)
+              
+              # Calculate days until expiry
+              days_until_expiry=$(( (expiry_timestamp - current_timestamp) / 86400 ))
+              
+              echo "SSL certificate for $domain expires in $days_until_expiry days"
+              
+              if [ $days_until_expiry -lt 30 ]; then
+                echo "⚠️ SSL certificate for $domain expires in less than 30 days!"
+                # You can add notification logic here
+              fi
+            else
+              echo "❌ Could not retrieve SSL certificate for $domain"
+            fi
+          fi
+        done
+
+  backup-check:
+    name: Backup Verification
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check recent backups
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.PRODUCTION_HOST }}
+        username: ${{ secrets.PRODUCTION_USER }}
+        key: ${{ secrets.PRODUCTION_SSH_KEY }}
+        script: |
+          cd /opt/digital-wallet-app
+          
+          # Check if backup directory exists
+          if [ ! -d "./backups" ]; then
+            echo "❌ Backup directory not found"
+            exit 1
+          fi
+          
+          # Check if there are recent backups (within last 24 hours)
+          recent_backups=$(find ./backups -name "backup_*.db" -mtime -1 | wc -l)
+          
+          if [ "$recent_backups" -gt 0 ]; then
+            echo "✅ Found $recent_backups recent backup(s)"
+          else
+            echo "⚠️ No recent backups found (within last 24 hours)"
+          fi
+          
+          # Check total backup count
+          total_backups=$(find ./backups -name "backup_*.db" | wc -l)
+          echo "Total backups: $total_backups"
+          
+          # Check backup sizes
+          echo "Backup sizes:"
+          find ./backups -name "backup_*.db" -exec du -h {} \;

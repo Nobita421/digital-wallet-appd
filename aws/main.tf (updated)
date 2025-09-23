@@ -1,0 +1,33 @@
+
+# Add RDS MySQL instance
+resource "aws_db_instance" "mysql" {
+  identifier = "digital-wallet-mysql"
+  
+  engine         = "mysql"
+  engine_version = "8.0"
+  instance_class = "db.t3.micro"
+  
+  allocated_storage     = 20
+  max_allocated_storage = 100
+  storage_type         = "gp2"
+  storage_encrypted    = true
+  
+  db_name  = "digital_wallet"
+  username = "admin"
+  password = "password123"
+  
+  parameter_group_name = "default.mysql8.0"
+  
+  backup_retention_period = 7
+  skip_final_snapshot     = false
+  
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
+  db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
+  
+  multi_az               = false
+  publicly_accessible    = false
+  
+  tags = {
+    Name = "digital-wallet-mysql"
+  }
+}
