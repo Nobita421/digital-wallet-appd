@@ -49,7 +49,7 @@ export default function Home() {
 
   const handleTransferComplete = () => {
     // Refresh wallet data after transfer
-    const userId = 'cmfurffxs0000svlv7ls9z6vf'
+    const userId = '1'
     
     const refreshData = async () => {
       try {
@@ -71,7 +71,7 @@ export default function Home() {
 
   useEffect(() => {
     // Use the actual user ID from the seeded database
-    const userId = 'cmfurffxs0000svlv7ls9z6vf' // This is the ID from the seeded user
+    const userId = '1' // This is the ID from the seeded user
     
     const fetchWalletData = async () => {
       try {
@@ -288,15 +288,15 @@ export default function Home() {
               </Button>
               <TransferModal 
                 currentUser={{
-                  id: 'cmfurffxs0000svlv7ls9z6vf',
+                  id: '1',
                   name: 'John Doe',
                   email: 'john.doe@example.com'
                 }}
                 onTransferComplete={handleTransferComplete}
                 trigger={
-                  <Button variant="outline" size="sm" className="border-white text-white hover:bg-white hover:text-blue-600">
-                    <Send className="h-4 w-4 mr-2" />
-                    Send
+                  <Button variant="secondary" size="sm" className="bg-white text-blue-600 hover:bg-blue-50">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Money
                   </Button>
                 }
               />
@@ -310,7 +310,7 @@ export default function Home() {
             <CardContent className="p-6 text-center">
               <TransferModal 
                 currentUser={{
-                  id: 'cmfurffxs0000svlv7ls9z6vf',
+                  id: '1',
                   name: 'John Doe',
                   email: 'john.doe@example.com'
                 }}
@@ -337,7 +337,7 @@ export default function Home() {
           <Card className="cursor-pointer hover:shadow-md transition-shadow">
             <CardContent className="p-6 text-center">
               <QRCodeModal 
-                userId="cmfurffxs0000svlv7ls9z6vf"
+                userId="1"
                 trigger={
                   <div className="space-y-2">
                     <QrCode className="h-8 w-8 mx-auto mb-2 text-purple-500" />
@@ -352,7 +352,7 @@ export default function Home() {
           <Card className="cursor-pointer hover:shadow-md transition-shadow">
             <CardContent className="p-6 text-center">
               <BillPaymentModal 
-                userId="cmfurffxs0000svlv7ls9z6vf"
+                userId="1"
                 onPaymentComplete={handleTransferComplete}
                 trigger={
                   <div className="space-y-2">
@@ -436,7 +436,7 @@ export default function Home() {
           
           <TabsContent value="budgets">
             <BudgetManagement 
-              userId="cmfurffxs0000svlv7ls9z6vf"
+              userId="1"
               onBudgetUpdate={handleTransferComplete}
             />
           </TabsContent>

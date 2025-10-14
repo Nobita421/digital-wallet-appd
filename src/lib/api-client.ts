@@ -1,4 +1,3 @@
-
 import { apiConfig, endpoints } from './api-config'
 
 class ApiClient {
@@ -20,6 +19,13 @@ class ApiClient {
         ...apiConfig.headers,
         ...options.headers,
       },
+    }
+
+    // Remove Content-Type header for GET requests
+    if (config.method === 'GET' || (!config.method && options.method !== 'POST' && options.method !== 'PUT' && options.method !== 'PATCH')) {
+      if (config.headers && 'Content-Type' in config.headers) {
+        delete (config.headers as any)['Content-Type']
+      }
     }
 
     try {
@@ -61,14 +67,62 @@ class ApiClient {
   }
 
   // Bills API
-  async getBills(userId: string) {
-    return this.request(`${endpoints.bills}?userId=${userId}`)
+  async getBills(userId: string, page: number = 0, limit: number = 10) {
+    return this.request(`${endpoints.bills}?userId=${userId}&page=${page}&limit=${limit}`)
+  }
+
+  async createBill(userId: string, billData: {
+    name: string
+    amount: number
+    currency?: string
+    dueDate: string
+    category?: string
+    description?: string
+    isRecurring?: boolean
+    recurringPeriod?: string
+  }) {
+    return this.request(`${endpoints.bills}?userId=${userId}`, {
+      method: 'POST',
+      body: JSON.stringify(billData),
+    })
   }
 
   async payBill(billId: string, userId: string) {
-    return this.request(`${endpoints.bills}/pay`, {
+    return this.request(`${endpoints.bills}/pay?billId=${billId}&userId=${userId}`, {
       method: 'POST',
-      body: JSON.stringify({ billId, userId }),
+    })
+  }
+
+  // Budgets API
+  async getBudgets(userId: string, page: number = 0, limit: number = 10) {
+    return this.request(`${endpoints.budgets}?userId=${userId}&page=${page}&limit=${limit}`)
+  }
+
+  async createBudget(userId: string, budgetData: {
+    name: string
+    amount: number
+    currency?: string
+    category?: string
+    period?: string
+    startDate: string
+    endDate?: string
+  }) {
+    return this.request(`${endpoints.budgets}?userId=${userId}`, {
+      method: 'POST',
+      body: JSON.stringify(budgetData),
+    })
+  }
+
+  async updateBudget(budgetId: string, userId: string, budgetData: any) {
+    return this.request(`${endpoints.budgets}/${budgetId}?userId=${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(budgetData),
+    })
+  }
+
+  async deleteBudget(budgetId: string, userId: string) {
+    return this.request(`${endpoints.budgets}/${budgetId}?userId=${userId}`, {
+      method: 'DELETE',
     })
   }
 }

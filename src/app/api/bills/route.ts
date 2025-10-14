@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8081'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
-    const limit = parseInt(searchParams.get('limit') || '10')
-    const offset = parseInt(searchParams.get('offset') || '0')
+    const page = searchParams.get('page') || '0'
+    const limit = searchParams.get('limit') || '10'
 
     if (!userId) {
       return NextResponse.json(
@@ -15,30 +16,20 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const bills = await db.bill.findMany({
-      where: { userId },
-      orderBy: { dueDate: 'asc' },
-      take: limit,
-      skip: offset
-    })
+    // Proxy to backend
+    const backendUrl = `${BACKEND_URL}/api/bills?userId=${userId}&page=${page}&limit=${limit}`
+    const response = await fetch(backendUrl)
 
-    const total = await db.bill.count({
-      where: { userId }
-    })
+    if (!response.ok) {
+      throw new Error(`Backend responded with status: ${response.status}`)
+    }
 
-    return NextResponse.json({
-      bills,
-      pagination: {
-        total,
-        limit,
-        offset,
-        hasMore: offset + limit < total
-      }
-    })
+    const data = await response.json()
+    return NextResponse.json(data)
   } catch (error) {
     console.error('Error fetching bills:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to fetch bills from backend' },
       { status: 500 }
     )
   }
@@ -47,33 +38,38 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { userId, name, amount, currency, dueDate, category, description, isRecurring } = body
+    const { userId } = body
 
-    if (!userId || !name || !amount || !dueDate || !category) {
+    if (!userId) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'User ID is required' },
         { status: 400 }
       )
     }
 
-    const bill = await db.bill.create({
-      data: {
-        userId,
-        name,
-        amount: parseFloat(amount),
-        currency: currency || 'USD',
-        dueDate: new Date(dueDate),
-        category,
-        description,
-        isRecurring: isRecurring || false
-      }
+    // Remove userId from body as it's sent as query param
+    const { userId: _, ...billData } = body
+
+    // Proxy to backend
+    const backendUrl = `${BACKEND_URL}/api/bills?userId=${userId}`
+    const response = await fetch(backendUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(billData),
     })
 
-    return NextResponse.json(bill, { status: 201 })
+    if (!response.ok) {
+      throw new Error(`Backend responded with status: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return NextResponse.json(data, { status: 201 })
   } catch (error) {
     console.error('Error creating bill:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to create bill' },
       { status: 500 }
     )
   }

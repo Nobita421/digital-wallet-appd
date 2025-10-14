@@ -38,7 +38,7 @@ export default function TransferModal({ currentUser, onTransferComplete, trigger
   // Mock users for demonstration
   const mockUsers: User[] = [
     {
-      id: 'cmfurffxs0000svlv7ls9z6vf',
+      id: '1',
       name: 'John Doe',
       email: 'john.doe@example.com'
     },

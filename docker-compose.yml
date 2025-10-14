@@ -1,26 +1,30 @@
-version: '3.8'
-
 services:
   # Next.js Application
   app:
     build: .
+    container_name: frontend
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=file:./dev.db
-    volumes:
-      - ./dev.db:/app/dev.db
+      - NEXT_PUBLIC_API_URL=http://backend:8081/api
     depends_on:
-      - db
+      - backend
     restart: unless-stopped
 
-  # Database (SQLite for simplicity, but you can replace with PostgreSQL/MySQL)
-  db:
-    image: alpine:latest
-    volumes:
-      - ./dev.db:/data/dev.db
-    command: sh -c "touch /data/dev.db && chmod 666 /data/dev.db && tail -f /dev/null"
+  # Spring Boot Backend
+  backend:
+    build: ../digital-wallet-backend
+    container_name: backend
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/digital_wallet
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - SPRING_WEB_CORS_ALLOWED-ORIGINS=http://localhost:3000,http://app:3000
+      - SERVER_PORT=8081
     restart: unless-stopped
 
   # Nginx Reverse Proxy (optional, for production)
@@ -37,6 +41,3 @@ services:
     restart: unless-stopped
     profiles:
       - production
-
-volumes:
-  db_data:
