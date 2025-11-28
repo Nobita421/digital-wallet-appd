@@ -50,10 +50,10 @@ export default function RegisterPage() {
 
         try {
             await register({
-                name: formData.name,
-                email: formData.email,
+                name: formData.name.trim(),
+                email: formData.email.trim(),
                 password: formData.password,
-                phone: formData.phone
+                phone: formData.phone.trim()
             })
             toast({
                 title: "Account created!",
@@ -190,15 +190,31 @@ export default function RegisterPage() {
                                 <Button
                                     type="button"
                                     onClick={() => {
-                                        if (formData.name && formData.email) {
-                                            setStep(2)
-                                        } else {
+                                        if (!formData.name || !formData.email) {
                                             toast({
                                                 variant: "destructive",
                                                 title: "Required fields",
                                                 description: "Please fill in your name and email.",
                                             })
+                                            return
                                         }
+                                        if (formData.name.trim().length < 3) {
+                                            toast({
+                                                variant: "destructive",
+                                                title: "Name too short",
+                                                description: "Your name must be at least 3 characters long.",
+                                            })
+                                            return
+                                        }
+                                        if (formData.name.trim().length > 20) {
+                                            toast({
+                                                variant: "destructive",
+                                                title: "Name too long",
+                                                description: "Your name must be no more than 20 characters.",
+                                            })
+                                            return
+                                        }
+                                        setStep(2)
                                     }}
                                     className="w-full h-14 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-semibold rounded-xl shadow-lg shadow-emerald-500/25 transition-all duration-300 hover:shadow-emerald-500/40 hover:scale-[1.02]"
                                 >
