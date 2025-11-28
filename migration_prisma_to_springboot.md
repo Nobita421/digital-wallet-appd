@@ -2,7 +2,7 @@
 
 This guide provides a detailed step-by-step process to migrate your digital wallet application from a full-stack Next.js app with Prisma ORM and SQLite to a decoupled architecture with Next.js frontend and Spring Boot backend using MySQL.
 
-## Table of Contents
+## Table of Contents 
 1. [Prerequisites](#prerequisites)
 2. [Phase 1: Environment Setup](#phase-1-environment-setup)
 3. [Phase 2: Create Spring Boot Backend](#phase-2-create-spring-boot-backend)
