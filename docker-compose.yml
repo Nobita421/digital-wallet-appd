@@ -7,7 +7,8 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=http://backend:8081/api
+      # Use localhost:8081 for browser-side API calls
+      - NEXT_PUBLIC_API_URL=http://localhost:8081/api
     depends_on:
       - backend
     restart: unless-stopped
@@ -23,7 +24,7 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/digital_wallet
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=postgres
-      - SPRING_WEB_CORS_ALLOWED-ORIGINS=http://localhost:3000,http://app:3000
+      - SPRING_WEB_CORS_ALLOWED-ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://app:3000
       - SERVER_PORT=8081
     restart: unless-stopped
 

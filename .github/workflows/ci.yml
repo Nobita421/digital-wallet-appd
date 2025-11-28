@@ -8,8 +8,8 @@ on:
 
 env:
   NODE_VERSION: '18'
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  FRONTEND_IMAGE_NAME: digital-wallet-frontend
 
 jobs:
   test:
@@ -39,15 +39,11 @@ jobs:
       run: |
         npm run test:ci || echo "No tests found, skipping..."
 
-  build-and-push:
-    name: Build and Push Docker Image
+  build-and-push-dockerhub:
+    name: Build and Push to Docker Hub
     runs-on: ubuntu-latest
     needs: test
     if: github.ref == 'refs/heads/main'
-    
-    permissions:
-      contents: read
-      packages: write
 
     steps:
     - name: Checkout code
@@ -56,25 +52,23 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Log in to Container Registry
+    - name: Log in to Docker Hub
       uses: docker/login-action@v3
       with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Extract metadata
+    - name: Extract metadata for Docker
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}
         tags: |
           type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
+          type=sha,prefix=
           type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Build and push Docker image
+    - name: Build and push Docker image to Docker Hub
       uses: docker/build-push-action@v5
       with:
         context: .
@@ -88,7 +82,7 @@ jobs:
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: build-and-push-dockerhub
     if: github.ref == 'refs/heads/main'
     environment: staging
     
@@ -111,7 +105,7 @@ jobs:
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: build-and-push-dockerhub
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
     
@@ -135,8 +129,8 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: test
-  permissions:
-    security-events: write
+    permissions:
+      security-events: write
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
