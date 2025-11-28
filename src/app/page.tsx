@@ -1,30 +1,33 @@
 "use client"
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/context/AuthContext'
+import { DashboardLayout } from '@/components/dashboard-layout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import TransferModal from '@/components/transfer-modal'
 import QRCodeModal from '@/components/qr-code-modal'
 import BillPaymentModal from '@/components/bill-payment-modal'
 import BudgetManagement from '@/components/budget-management'
-import { 
-  Wallet, 
-  Send, 
-  Download, 
-  QrCode, 
-  CreditCard, 
-  TrendingUp, 
+import { apiClient } from '@/lib/api-client'
+import {
+  Send,
+  Download,
+  QrCode,
+  CreditCard,
+  TrendingUp,
   TrendingDown,
   Plus,
   ArrowUpRight,
   ArrowDownRight,
   Clock,
   CheckCircle,
-  XCircle
+  XCircle,
+  Wallet
 } from 'lucide-react'
 
 interface WalletData {
@@ -43,127 +46,57 @@ interface Transaction {
 }
 
 export default function Home() {
+  const { user, isAuthenticated, token } = useAuth()
+  const router = useRouter()
   const [wallet, setWallet] = useState<WalletData | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
 
-  const handleTransferComplete = () => {
-    // Refresh wallet data after transfer
-    const userId = '1'
-    
-    const refreshData = async () => {
-      try {
-        const walletResponse = await fetch(`/api/wallet?userId=${userId}`)
-        const walletData = await walletResponse.json()
-        
-        const transactionsResponse = await fetch(`/api/transactions?userId=${userId}&limit=10`)
-        const transactionsData = await transactionsResponse.json()
-        
-        setWallet(walletData)
-        setTransactions(transactionsData.transactions || [])
-      } catch (error) {
-        console.error('Error refreshing data:', error)
-      }
+  // Auth Protection
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/login')
     }
+  }, [isAuthenticated, router])
 
-    refreshData()
+  const fetchData = async () => {
+    if (!user?.id) return
+
+    try {
+      // Use apiClient which now handles the token automatically
+      const walletData: any = await apiClient.getWallet()
+      const transactionsData: any = await apiClient.getTransactions(0, 10)
+
+      setWallet(walletData)
+      setTransactions(transactionsData.transactions || [])
+    } catch (error) {
+      console.error('Error fetching data:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
-    // Use the actual user ID from the seeded database
-    const userId = '1' // This is the ID from the seeded user
-    
-    const fetchWalletData = async () => {
-      try {
-        // Fetch wallet data
-        const walletResponse = await fetch(`/api/wallet?userId=${userId}`)
-        const walletData = await walletResponse.json()
-        
-        // Fetch transactions
-        const transactionsResponse = await fetch(`/api/transactions?userId=${userId}&limit=10`)
-        const transactionsData = await transactionsResponse.json()
-        
-        setWallet(walletData)
-        setTransactions(transactionsData.transactions || [])
-      } catch (error) {
-        console.error('Error fetching wallet data:', error)
-        // Fallback to mock data if API fails
-        const mockWallet: WalletData = {
-          balance: 2540.50,
-          currency: 'USD'
-        }
-        
-        const mockTransactions: Transaction[] = [
-          {
-            id: '1',
-            type: 'RECEIVE',
-            amount: 500.00,
-            currency: 'USD',
-            description: 'Payment from John Doe',
-            status: 'COMPLETED',
-            createdAt: '2024-01-15T10:30:00Z'
-          },
-          {
-            id: '2',
-            type: 'SEND',
-            amount: 120.50,
-            currency: 'USD',
-            description: 'Coffee Shop',
-            status: 'COMPLETED',
-            createdAt: '2024-01-14T15:45:00Z'
-          },
-          {
-            id: '3',
-            type: 'BILL_PAYMENT',
-            amount: 85.00,
-            currency: 'USD',
-            description: 'Electricity Bill',
-            status: 'COMPLETED',
-            createdAt: '2024-01-13T09:20:00Z'
-          },
-          {
-            id: '4',
-            type: 'DEPOSIT',
-            amount: 1000.00,
-            currency: 'USD',
-            description: 'Bank Transfer',
-            status: 'COMPLETED',
-            createdAt: '2024-01-12T14:10:00Z'
-          }
-        ]
-        
-        setWallet(mockWallet)
-        setTransactions(mockTransactions)
-      } finally {
-        setLoading(false)
-      }
+    if (isAuthenticated && user?.id) {
+      fetchData()
     }
+  }, [isAuthenticated, user?.id])
 
-    fetchWalletData()
-  }, [])
+  const handleTransferComplete = () => {
+    fetchData()
+  }
 
-  const formatCurrency = (amount: number, currency?: string) => {
+  const formatCurrency = (amount: number | undefined | null, currency: string = 'USD') => {
+    if (amount === undefined || amount === null || isNaN(amount)) {
+      return '$0.00'
+    }
     try {
-      // If currency is provided, format as currency. Otherwise fall back to a decimal format.
-      if (currency) {
-        return new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: currency
-        }).format(amount)
-      }
-
-      // Fallback: show as a decimal with two fraction digits so UI remains stable
       return new Intl.NumberFormat('en-US', {
-        style: 'decimal',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        style: 'currency',
+        currency: currency
       }).format(amount)
     } catch (err) {
-      // If Intl fails for any reason, log and return a simple fixed string
-      // This prevents the whole render from crashing due to bad data.
-      // eslint-disable-next-line no-console
-      console.error('formatCurrency error', err, amount, currency)
-      return amount != null ? amount.toFixed(2) : '0.00'
+      return `$${amount.toFixed(2)}`
     }
   }
 
@@ -178,270 +111,260 @@ export default function Home() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'COMPLETED':
-        return <CheckCircle className="h-4 w-4 text-green-500" />
+        return <CheckCircle className="h-4 w-4 text-green-400" />
       case 'PENDING':
-        return <Clock className="h-4 w-4 text-yellow-500" />
+        return <Clock className="h-4 w-4 text-yellow-400" />
       case 'FAILED':
-        return <XCircle className="h-4 w-4 text-red-500" />
+        return <XCircle className="h-4 w-4 text-red-400" />
       default:
-        return <Clock className="h-4 w-4 text-gray-500" />
+        return <Clock className="h-4 w-4 text-gray-400" />
     }
   }
 
   const getTransactionIcon = (type: string) => {
     switch (type) {
       case 'SEND':
-        return <ArrowUpRight className="h-4 w-4 text-red-500" />
+        return <ArrowUpRight className="h-4 w-4 text-red-400" />
       case 'RECEIVE':
-        return <ArrowDownRight className="h-4 w-4 text-green-500" />
+        return <ArrowDownRight className="h-4 w-4 text-green-400" />
       case 'BILL_PAYMENT':
-        return <CreditCard className="h-4 w-4 text-blue-500" />
+        return <CreditCard className="h-4 w-4 text-blue-400" />
       case 'DEPOSIT':
-        return <TrendingUp className="h-4 w-4 text-green-500" />
+        return <TrendingUp className="h-4 w-4 text-green-400" />
       case 'WITHDRAWAL':
-        return <TrendingDown className="h-4 w-4 text-red-500" />
+        return <TrendingDown className="h-4 w-4 text-red-400" />
       default:
-        return <Wallet className="h-4 w-4 text-gray-500" />
+        return <Wallet className="h-4 w-4 text-gray-400" />
     }
+  }
+
+  if (!isAuthenticated) {
+    return null // Or a loading spinner while redirecting
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background p-4">
-        <div className="max-w-6xl mx-auto space-y-6">
+      <DashboardLayout>
+        <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <Skeleton className="h-8 w-48" />
-              <Skeleton className="h-4 w-32 mt-2" />
+              <Skeleton className="h-8 w-48 bg-white/10" />
+              <Skeleton className="h-4 w-32 mt-2 bg-white/10" />
             </div>
-            <Skeleton className="h-10 w-10 rounded-full" />
           </div>
-          
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <Skeleton className="h-48 w-full rounded-xl bg-white/10" />
+          <div className="grid gap-6 md:grid-cols-4">
             {[...Array(4)].map((_, i) => (
-              <Card key={i}>
-                <CardHeader className="pb-2">
-                  <Skeleton className="h-4 w-24" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-8 w-32" />
-                </CardContent>
-              </Card>
+              <Skeleton key={i} className="h-32 rounded-xl bg-white/10" />
             ))}
           </div>
-          
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-32" />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <Skeleton className="h-8 w-8 rounded-full" />
-                      <div>
-                        <Skeleton className="h-4 w-24" />
-                        <Skeleton className="h-3 w-16 mt-1" />
-                      </div>
-                    </div>
-                    <Skeleton className="h-4 w-20" />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
         </div>
-      </div>
+      </DashboardLayout>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-6xl mx-auto p-4 space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Digital Wallet</h1>
-            <p className="text-muted-foreground">Manage your finances securely</p>
-          </div>
-          <Avatar className="h-10 w-10">
-            <AvatarImage src="/placeholder-avatar.jpg" />
-            <AvatarFallback>JD</AvatarFallback>
-          </Avatar>
+    <DashboardLayout>
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight text-white">Overview</h2>
+          <p className="text-muted-foreground">Welcome back, {user?.name}</p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" className="glass hover:bg-white/10 border-white/10 text-white">
+            <Download className="mr-2 h-4 w-4" />
+            Download Report
+          </Button>
+        </div>
+      </div>
 
-        {/* Wallet Balance Card */}
-        <Card className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
-          <CardHeader>
-            <CardTitle className="text-lg">Total Balance</CardTitle>
-            <CardDescription className="text-blue-100">Your available funds</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold mb-4">
-              {wallet ? formatCurrency(wallet.balance, wallet.currency) : '$0.00'}
+      {/* Wallet Balance Card */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-purple-600 to-blue-600 p-8 text-white shadow-2xl">
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 -mb-10 -ml-10 h-64 w-64 rounded-full bg-black/10 blur-3xl"></div>
+
+        <div className="relative z-10">
+          <div className="flex justify-between items-start mb-8">
+            <div>
+              <p className="text-blue-100 font-medium mb-1">Total Balance</p>
+              <h3 className="text-4xl md:text-5xl font-bold tracking-tight">
+                {formatCurrency(wallet?.balance, wallet?.currency)}
+              </h3>
             </div>
-            <div className="flex gap-2">
-              <Button variant="secondary" size="sm" className="bg-white text-blue-600 hover:bg-blue-50">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Money
-              </Button>
-              <TransferModal 
-                currentUser={{
-                  id: '1',
-                  name: 'John Doe',
-                  email: 'john.doe@example.com'
-                }}
-                onTransferComplete={handleTransferComplete}
-                trigger={
-                  <Button variant="secondary" size="sm" className="bg-white text-blue-600 hover:bg-blue-50">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Money
-                  </Button>
-                }
-              />
+            <div className="p-3 bg-white/10 rounded-xl backdrop-blur-md border border-white/20">
+              <Wallet className="h-8 w-8 text-white" />
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <TransferModal
+              currentUser={user!}
+              onTransferComplete={handleTransferComplete}
+              trigger={
+                <Button size="lg" className="bg-white text-primary hover:bg-blue-50 border-none shadow-lg font-semibold">
+                  <Plus className="h-5 w-5 mr-2" />
+                  Add Money
+                </Button>
+              }
+            />
+            <Button size="lg" variant="outline" className="bg-black/20 border-white/20 text-white hover:bg-black/30 backdrop-blur-sm">
+              <ArrowUpRight className="h-5 w-5 mr-2" />
+              Send
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="glass glass-hover cursor-pointer border-white/5">
+          <CardContent className="p-6 flex flex-col items-center text-center gap-4">
+            <div className="p-4 rounded-full bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50">
+              <Send className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-white">Send Money</h3>
+              <p className="text-sm text-muted-foreground">Transfer to anyone</p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Quick Actions */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="cursor-pointer hover:shadow-md transition-shadow">
-            <CardContent className="p-6 text-center">
-              <TransferModal 
-                currentUser={{
-                  id: '1',
-                  name: 'John Doe',
-                  email: 'john.doe@example.com'
-                }}
-                onTransferComplete={handleTransferComplete}
-                trigger={
-                  <div className="space-y-2">
-                    <Send className="h-8 w-8 mx-auto mb-2 text-blue-500" />
-                    <h3 className="font-semibold">Send Money</h3>
-                    <p className="text-sm text-muted-foreground">Transfer to anyone</p>
-                  </div>
-                }
-              />
-            </CardContent>
-          </Card>
-          
-          <Card className="cursor-pointer hover:shadow-md transition-shadow">
-            <CardContent className="p-6 text-center">
-              <Download className="h-8 w-8 mx-auto mb-2 text-green-500" />
-              <h3 className="font-semibold">Request Money</h3>
+        <Card className="glass glass-hover cursor-pointer border-white/5">
+          <CardContent className="p-6 flex flex-col items-center text-center gap-4">
+            <div className="p-4 rounded-full bg-green-500/20 text-green-400 ring-1 ring-green-500/50">
+              <Download className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-white">Request</h3>
               <p className="text-sm text-muted-foreground">Get paid instantly</p>
-            </CardContent>
-          </Card>
-          
-          <Card className="cursor-pointer hover:shadow-md transition-shadow">
-            <CardContent className="p-6 text-center">
-              <QRCodeModal 
-                userId="1"
-                trigger={
-                  <div className="space-y-2">
-                    <QrCode className="h-8 w-8 mx-auto mb-2 text-purple-500" />
-                    <h3 className="font-semibold">QR Code</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="glass glass-hover cursor-pointer border-white/5">
+          <CardContent className="p-6 flex flex-col items-center text-center gap-4">
+            <QRCodeModal
+              userId={user?.id.toString() || '0'}
+              trigger={
+                <div className="flex flex-col items-center gap-4 w-full">
+                  <div className="p-4 rounded-full bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/50">
+                    <QrCode className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">QR Code</h3>
                     <p className="text-sm text-muted-foreground">Scan or generate</p>
                   </div>
-                }
-              />
-            </CardContent>
-          </Card>
-          
-          <Card className="cursor-pointer hover:shadow-md transition-shadow">
-            <CardContent className="p-6 text-center">
-              <BillPaymentModal 
-                userId="1"
-                onPaymentComplete={handleTransferComplete}
-                trigger={
-                  <div className="space-y-2">
-                    <CreditCard className="h-8 w-8 mx-auto mb-2 text-orange-500" />
-                    <h3 className="font-semibold">Pay Bills</h3>
-                    <p className="text-sm text-muted-foreground">Pay utilities & more</p>
-                  </div>
-                }
-              />
-            </CardContent>
-          </Card>
-        </div>
+                </div>
+              }
+            />
+          </CardContent>
+        </Card>
 
-        {/* Main Content Tabs */}
-        <Tabs defaultValue="transactions" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="transactions">Transactions</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            <TabsTrigger value="budgets">Budgets</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="transactions">
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Transactions</CardTitle>
-                <CardDescription>Your latest financial activities</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {transactions.map((transaction) => (
-                    <div key={transaction.id} className="flex items-center justify-between p-4 rounded-lg border">
+        <Card className="glass glass-hover cursor-pointer border-white/5">
+          <CardContent className="p-6 flex flex-col items-center text-center gap-4">
+            <BillPaymentModal
+              userId={user?.id.toString() || '0'}
+              onPaymentComplete={handleTransferComplete}
+              trigger={
+                <div className="flex flex-col items-center gap-4 w-full">
+                  <div className="p-4 rounded-full bg-orange-500/20 text-orange-400 ring-1 ring-orange-500/50">
+                    <CreditCard className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">Pay Bills</h3>
+                    <p className="text-sm text-muted-foreground">Utilities & more</p>
+                  </div>
+                </div>
+              }
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Content Tabs */}
+      <Tabs defaultValue="transactions" className="space-y-6">
+        <TabsList className="bg-white/5 border border-white/10 p-1 rounded-xl">
+          <TabsTrigger value="transactions" className="data-[state=active]:bg-primary data-[state=active]:text-white rounded-lg">Transactions</TabsTrigger>
+          <TabsTrigger value="analytics" className="data-[state=active]:bg-primary data-[state=active]:text-white rounded-lg">Analytics</TabsTrigger>
+          <TabsTrigger value="budgets" className="data-[state=active]:bg-primary data-[state=active]:text-white rounded-lg">Budgets</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="transactions">
+          <Card className="glass border-white/5">
+            <CardHeader>
+              <CardTitle className="text-white">Recent Transactions</CardTitle>
+              <CardDescription>Your latest financial activities</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {transactions.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <p>No transactions found</p>
+                  </div>
+                ) : (
+                  transactions.map((transaction) => (
+                    <div key={transaction.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/5">
                       <div className="flex items-center space-x-4">
-                        <div className="p-2 rounded-full bg-muted">
+                        <div className="p-3 rounded-full bg-black/20 border border-white/5">
                           {getTransactionIcon(transaction.type)}
                         </div>
                         <div>
-                          <p className="font-medium">{transaction.description || transaction.type}</p>
+                          <p className="font-medium text-white">{transaction.description || transaction.type}</p>
                           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                             <span>{formatDate(transaction.createdAt)}</span>
                             <div className="flex items-center space-x-1">
                               {getStatusIcon(transaction.status)}
-                              <span className="capitalize">{transaction.status.toLowerCase()}</span>
+                              <span className="capitalize text-xs">{transaction.status.toLowerCase()}</span>
                             </div>
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className={`font-semibold ${
-                          transaction.type === 'SEND' || transaction.type === 'BILL_PAYMENT' 
-                            ? 'text-red-500' 
-                            : 'text-green-500'
-                        }`}>
+                        <p className={`font-bold ${transaction.type === 'SEND' || transaction.type === 'BILL_PAYMENT'
+                          ? 'text-red-400'
+                          : 'text-green-400'
+                          }`}>
                           {transaction.type === 'SEND' || transaction.type === 'BILL_PAYMENT' ? '-' : '+'}
                           {formatCurrency(transaction.amount, transaction.currency)}
                         </p>
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-xs border-white/10 text-muted-foreground">
                           {transaction.type.replace('_', ' ')}
                         </Badge>
                       </div>
                     </div>
-                  ))}
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics">
+          <Card className="glass border-white/5">
+            <CardHeader>
+              <CardTitle className="text-white">Spending Analytics</CardTitle>
+              <CardDescription>Track your financial patterns</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-16 text-muted-foreground">
+                <div className="p-6 rounded-full bg-white/5 w-fit mx-auto mb-6 ring-1 ring-white/10">
+                  <TrendingUp className="h-12 w-12 text-primary" />
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="analytics">
-            <Card>
-              <CardHeader>
-                <CardTitle>Spending Analytics</CardTitle>
-                <CardDescription>Track your financial patterns</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8 text-muted-foreground">
-                  <TrendingUp className="h-12 w-12 mx-auto mb-4" />
-                  <p>Analytics features coming soon</p>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="budgets">
-            <BudgetManagement 
-              userId="1"
-              onBudgetUpdate={handleTransferComplete}
-            />
-          </TabsContent>
-        </Tabs>
-      </div>
-    </div>
+                <h3 className="text-xl font-semibold text-white mb-2">Analytics Coming Soon</h3>
+                <p>We are building powerful charts to help you visualize your spending.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="budgets">
+          <BudgetManagement
+            userId={user?.id.toString() || '0'}
+            onBudgetUpdate={handleTransferComplete}
+          />
+        </TabsContent>
+      </Tabs>
+    </DashboardLayout>
   )
 }

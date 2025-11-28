@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { QRCodeSVG } from 'qrcode.react'
 import { QrCode, Copy, Download, Share2, Clock } from 'lucide-react'
+import { toast } from "sonner"
 
 interface QRCodeModalProps {
   userId: string
@@ -32,7 +33,7 @@ export default function QRCodeModal({ userId, trigger }: QRCodeModalProps) {
     setIsGenerating(true)
     try {
       const expiresAt = expiresIn === 'never' ? null : new Date(Date.now() + parseInt(expiresIn) * 60 * 60 * 1000)
-      
+
       const response = await fetch('/api/qrcodes', {
         method: 'POST',
         headers: {
@@ -52,13 +53,14 @@ export default function QRCodeModal({ userId, trigger }: QRCodeModalProps) {
         const data = await response.json()
         setQRCode(data)
         setStep('generated')
+        toast.success('QR code generated successfully')
       } else {
         const error = await response.json()
-        alert(error.error || 'Failed to generate QR code')
+        toast.error(error.error || 'Failed to generate QR code')
       }
     } catch (error) {
       console.error('Error generating QR code:', error)
-      alert('Failed to generate QR code. Please try again.')
+      toast.error('Failed to generate QR code. Please try again.')
     } finally {
       setIsGenerating(false)
     }
@@ -67,7 +69,7 @@ export default function QRCodeModal({ userId, trigger }: QRCodeModalProps) {
   const copyToClipboard = () => {
     if (qrCode) {
       navigator.clipboard.writeText(qrCode.code)
-      alert('QR code copied to clipboard!')
+      toast.success('QR code copied to clipboard!')
     }
   }
 
@@ -196,7 +198,7 @@ export default function QRCodeModal({ userId, trigger }: QRCodeModalProps) {
               </Select>
             </div>
 
-            <Button 
+            <Button
               onClick={handleGenerate}
               disabled={isGenerating}
               className="w-full"
@@ -277,8 +279,8 @@ export default function QRCodeModal({ userId, trigger }: QRCodeModalProps) {
               </Button>
             </div>
 
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 setStep('form')
                 setQRCode(null)

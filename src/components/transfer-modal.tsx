@@ -11,9 +11,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Send, Search, User, Mail } from 'lucide-react'
+import { toast } from "sonner"
 
 interface User {
-  id: string
+  id: string | number
   name: string
   email: string
   avatar?: string
@@ -35,30 +36,32 @@ export default function TransferModal({ currentUser, onTransferComplete, trigger
   const [description, setDescription] = useState('')
   const [currency, setCurrency] = useState('USD')
 
-  // Mock users for demonstration
-  const mockUsers: User[] = [
-    {
-      id: '1',
-      name: 'John Doe',
-      email: 'john.doe@example.com'
-    },
-    {
-      id: 'user_2',
-      name: 'Jane Smith',
-      email: 'jane.smith@example.com'
-    },
-    {
-      id: 'user_3',
-      name: 'Bob Johnson',
-      email: 'bob.johnson@example.com'
-    }
-  ]
+  const [users, setUsers] = useState<User[]>([])
+  const [isSearching, setIsSearching] = useState(false)
 
-  const filteredUsers = mockUsers.filter(user => 
-    user.id !== currentUser.id &&
-    (user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-     user.email.toLowerCase().includes(searchQuery.toLowerCase()))
-  )
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query)
+    if (query.length < 2) {
+      setUsers([])
+      return
+    }
+
+    setIsSearching(true)
+    try {
+      import('@/lib/api-client').then(async ({ apiClient }) => {
+        const data: any = await apiClient.searchUsers(query)
+        // Filter out current user
+        const filtered = (data.users || []).filter((u: User) => u.id !== currentUser.id)
+        setUsers(filtered)
+      }).catch(error => {
+        console.error('Error searching users:', error)
+      })
+    } catch (error) {
+      console.error('Error searching users:', error)
+    } finally {
+      setIsSearching(false)
+    }
+  }
 
   const handleUserSelect = (user: User) => {
     setSelectedUser(user)
@@ -70,21 +73,15 @@ export default function TransferModal({ currentUser, onTransferComplete, trigger
 
     setIsProcessing(true)
     try {
-      const response = await fetch('/api/transfers', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          senderId: currentUser.id,
-          receiverId: selectedUser.id,
+      // Use apiClient directly
+      import('@/lib/api-client').then(async ({ apiClient }) => {
+        await apiClient.createTransfer({
+          receiverId: selectedUser.id.toString(),
           amount: parseFloat(amount),
           currency,
           description
         })
-      })
 
-      if (response.ok) {
         // Reset form and close modal
         setAmount('')
         setDescription('')
@@ -92,13 +89,13 @@ export default function TransferModal({ currentUser, onTransferComplete, trigger
         setStep('search')
         setIsOpen(false)
         onTransferComplete?.()
-      } else {
-        const error = await response.json()
-        alert(error.error || 'Transfer failed')
-      }
+      }).catch(error => {
+        console.error('Error processing transfer:', error)
+        toast.error(error.error || 'Transfer failed. Please try again.')
+      })
     } catch (error) {
       console.error('Error processing transfer:', error)
-      alert('Transfer failed. Please try again.')
+      toast.error('Transfer failed. Please try again.')
     } finally {
       setIsProcessing(false)
     }
@@ -138,16 +135,18 @@ export default function TransferModal({ currentUser, onTransferComplete, trigger
               <Input
                 placeholder="Search by name or email..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearch(e.target.value)}
                 className="pl-10"
               />
             </div>
 
             <div className="max-h-64 overflow-y-auto space-y-2">
-              {filteredUsers.length > 0 ? (
-                filteredUsers.map((user) => (
-                  <Card 
-                    key={user.id} 
+              {isSearching ? (
+                <div className="text-center py-4 text-muted-foreground">Searching...</div>
+              ) : users.length > 0 ? (
+                users.map((user) => (
+                  <Card
+                    key={user.id}
                     className="cursor-pointer hover:bg-muted/50 transition-colors"
                     onClick={() => handleUserSelect(user)}
                   >
@@ -244,14 +243,14 @@ export default function TransferModal({ currentUser, onTransferComplete, trigger
             </div>
 
             <div className="flex space-x-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setStep('search')}
                 disabled={isProcessing}
               >
                 Back
               </Button>
-              <Button 
+              <Button
                 onClick={handleTransfer}
                 disabled={!amount || parseFloat(amount) <= 0 || isProcessing}
                 className="flex-1"

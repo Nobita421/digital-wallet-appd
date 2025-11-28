@@ -13,6 +13,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { format } from 'date-fns'
 import { CreditCard, Plus, AlertCircle, CheckCircle, Clock } from 'lucide-react'
+import { toast } from "sonner"
 
 interface Bill {
   id: string
@@ -39,7 +40,7 @@ export default function BillPaymentModal({ userId, trigger, onPaymentComplete }:
   const [bills, setBills] = useState<Bill[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null)
-  
+
   // Form state for creating new bill
   const [formData, setFormData] = useState({
     name: '',
@@ -60,9 +61,10 @@ export default function BillPaymentModal({ userId, trigger, onPaymentComplete }:
   const fetchBills = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`/api/bills?userId=${userId}`)
-      const data = await response.json()
-      setBills(data.bills || [])
+      import('@/lib/api-client').then(async ({ apiClient }) => {
+        const data: any = await apiClient.getBills()
+        setBills(data.bills || [])
+      })
     } catch (error) {
       console.error('Error fetching bills:', error)
     } finally {
@@ -73,19 +75,13 @@ export default function BillPaymentModal({ userId, trigger, onPaymentComplete }:
   const handleCreateBill = async () => {
     setIsProcessing(true)
     try {
-      const response = await fetch('/api/bills', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
+      import('@/lib/api-client').then(async ({ apiClient }) => {
+        await apiClient.createBill({
           ...formData,
+          amount: parseFloat(formData.amount),
           dueDate: formData.dueDate.toISOString()
         })
-      })
 
-      if (response.ok) {
         // Reset form and refresh bills
         setFormData({
           name: '',
@@ -98,13 +94,13 @@ export default function BillPaymentModal({ userId, trigger, onPaymentComplete }:
         })
         setStep('list')
         await fetchBills()
-      } else {
-        const error = await response.json()
-        alert(error.error || 'Failed to create bill')
-      }
+      }).catch(error => {
+        console.error('Error creating bill:', error)
+        toast.error('Failed to create bill. Please try again.')
+      })
     } catch (error) {
       console.error('Error creating bill:', error)
-      alert('Failed to create bill. Please try again.')
+      toast.error('Failed to create bill. Please try again.')
     } finally {
       setIsProcessing(false)
     }
@@ -115,29 +111,21 @@ export default function BillPaymentModal({ userId, trigger, onPaymentComplete }:
 
     setIsProcessing(true)
     try {
-      const response = await fetch('/api/bills/pay', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          billId: selectedBill.id,
-          userId
-        })
-      })
+      import('@/lib/api-client').then(async ({ apiClient }) => {
+        await apiClient.payBill(selectedBill.id)
 
-      if (response.ok) {
         setSelectedBill(null)
         setStep('list')
         await fetchBills()
         onPaymentComplete?.()
-      } else {
-        const error = await response.json()
-        alert(error.error || 'Failed to pay bill')
-      }
+        toast.success('Bill paid successfully')
+      }).catch(error => {
+        console.error('Error paying bill:', error)
+        toast.error('Failed to pay bill. Please try again.')
+      })
     } catch (error) {
       console.error('Error paying bill:', error)
-      alert('Failed to pay bill. Please try again.')
+      toast.error('Failed to pay bill. Please try again.')
     } finally {
       setIsProcessing(false)
     }
@@ -248,7 +236,7 @@ export default function BillPaymentModal({ userId, trigger, onPaymentComplete }:
                         </div>
                         <div className="flex flex-col space-y-2">
                           {bill.status !== 'PAID' && (
-                            <Button 
+                            <Button
                               size="sm"
                               onClick={() => {
                                 setSelectedBill(bill)
@@ -268,9 +256,9 @@ export default function BillPaymentModal({ userId, trigger, onPaymentComplete }:
               <div className="text-center py-8 text-muted-foreground">
                 <CreditCard className="h-12 w-12 mx-auto mb-4" />
                 <p>No bills found</p>
-                <Button 
-                  onClick={() => setStep('create')} 
-                  variant="outline" 
+                <Button
+                  onClick={() => setStep('create')}
+                  variant="outline"
                   className="mt-4"
                 >
                   Add Your First Bill
@@ -288,7 +276,7 @@ export default function BillPaymentModal({ userId, trigger, onPaymentComplete }:
                 id="name"
                 placeholder="Electricity Bill"
                 value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />
             </div>
 
@@ -300,14 +288,14 @@ export default function BillPaymentModal({ userId, trigger, onPaymentComplete }:
                   type="number"
                   placeholder="0.00"
                   value={formData.amount}
-                  onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                   step="0.01"
                   min="0.01"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="currency">Currency</Label>
-                <Select value={formData.currency} onValueChange={(value) => setFormData({...formData, currency: value})}>
+                <Select value={formData.currency} onValueChange={(value) => setFormData({ ...formData, currency: value })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -322,7 +310,7 @@ export default function BillPaymentModal({ userId, trigger, onPaymentComplete }:
 
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
-              <Select value={formData.category} onValueChange={(value) => setFormData({...formData, category: value})}>
+              <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -345,7 +333,7 @@ export default function BillPaymentModal({ userId, trigger, onPaymentComplete }:
               <Calendar
                 mode="single"
                 selected={formData.dueDate}
-                onSelect={(date) => date && setFormData({...formData, dueDate: date})}
+                onSelect={(date) => date && setFormData({ ...formData, dueDate: date })}
                 className="rounded-md border"
               />
             </div>
@@ -356,20 +344,20 @@ export default function BillPaymentModal({ userId, trigger, onPaymentComplete }:
                 id="description"
                 placeholder="Monthly electricity bill"
                 value={formData.description}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={2}
               />
             </div>
 
             <div className="flex space-x-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setStep('list')}
                 disabled={isProcessing}
               >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 onClick={handleCreateBill}
                 disabled={!formData.name || !formData.amount || isProcessing}
                 className="flex-1"
@@ -417,8 +405,8 @@ export default function BillPaymentModal({ userId, trigger, onPaymentComplete }:
             </Card>
 
             <div className="flex space-x-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => {
                   setSelectedBill(null)
                   setStep('list')
@@ -427,7 +415,7 @@ export default function BillPaymentModal({ userId, trigger, onPaymentComplete }:
               >
                 Back
               </Button>
-              <Button 
+              <Button
                 onClick={handlePayBill}
                 disabled={isProcessing}
                 className="flex-1"

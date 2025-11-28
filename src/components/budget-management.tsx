@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { format } from 'date-fns'
 import { Wallet, Plus, TrendingUp, TrendingDown, AlertTriangle, Target } from 'lucide-react'
+import { toast } from "sonner"
 
 interface Budget {
   id: string
@@ -37,7 +38,7 @@ export default function BudgetManagement({ userId, onBudgetUpdate }: BudgetManag
   const [loading, setLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
-  
+
   const [formData, setFormData] = useState({
     name: '',
     amount: '',
@@ -55,9 +56,10 @@ export default function BudgetManagement({ userId, onBudgetUpdate }: BudgetManag
   const fetchBudgets = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`/api/budgets?userId=${userId}`)
-      const data = await response.json()
-      setBudgets(data.budgets || [])
+      import('@/lib/api-client').then(async ({ apiClient }) => {
+        const data: any = await apiClient.getBudgets()
+        setBudgets(data.budgets || [])
+      })
     } catch (error) {
       console.error('Error fetching budgets:', error)
     } finally {
@@ -68,20 +70,14 @@ export default function BudgetManagement({ userId, onBudgetUpdate }: BudgetManag
   const handleCreateBudget = async () => {
     setIsCreating(true)
     try {
-      const response = await fetch('/api/budgets', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
+      import('@/lib/api-client').then(async ({ apiClient }) => {
+        await apiClient.createBudget({
           ...formData,
+          amount: parseFloat(formData.amount),
           startDate: formData.startDate.toISOString(),
           endDate: formData.endDate.toISOString()
         })
-      })
 
-      if (response.ok) {
         // Reset form and refresh budgets
         setFormData({
           name: '',
@@ -95,13 +91,13 @@ export default function BudgetManagement({ userId, onBudgetUpdate }: BudgetManag
         setIsDialogOpen(false)
         await fetchBudgets()
         onBudgetUpdate?.()
-      } else {
-        const error = await response.json()
-        alert(error.error || 'Failed to create budget')
-      }
+      }).catch(error => {
+        console.error('Error creating budget:', error)
+        toast.error('Failed to create budget. Please try again.')
+      })
     } catch (error) {
       console.error('Error creating budget:', error)
-      alert('Failed to create budget. Please try again.')
+      toast.error('Failed to create budget. Please try again.')
     } finally {
       setIsCreating(false)
     }
@@ -187,7 +183,7 @@ export default function BudgetManagement({ userId, onBudgetUpdate }: BudgetManag
                   id="name"
                   placeholder="Monthly Food Budget"
                   value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 />
               </div>
 
@@ -199,14 +195,14 @@ export default function BudgetManagement({ userId, onBudgetUpdate }: BudgetManag
                     type="number"
                     placeholder="500"
                     value={formData.amount}
-                    onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                     step="0.01"
                     min="0.01"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="currency">Currency</Label>
-                  <Select value={formData.currency} onValueChange={(value) => setFormData({...formData, currency: value})}>
+                  <Select value={formData.currency} onValueChange={(value) => setFormData({ ...formData, currency: value })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -221,7 +217,7 @@ export default function BudgetManagement({ userId, onBudgetUpdate }: BudgetManag
 
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
-                <Select value={formData.category} onValueChange={(value) => setFormData({...formData, category: value})}>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
@@ -237,7 +233,7 @@ export default function BudgetManagement({ userId, onBudgetUpdate }: BudgetManag
 
               <div className="space-y-2">
                 <Label htmlFor="period">Period</Label>
-                <Select value={formData.period} onValueChange={(value) => setFormData({...formData, period: value})}>
+                <Select value={formData.period} onValueChange={(value) => setFormData({ ...formData, period: value })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -256,7 +252,7 @@ export default function BudgetManagement({ userId, onBudgetUpdate }: BudgetManag
                   <Calendar
                     mode="single"
                     selected={formData.startDate}
-                    onSelect={(date) => date && setFormData({...formData, startDate: date})}
+                    onSelect={(date) => date && setFormData({ ...formData, startDate: date })}
                     className="rounded-md border"
                   />
                 </div>
@@ -265,21 +261,21 @@ export default function BudgetManagement({ userId, onBudgetUpdate }: BudgetManag
                   <Calendar
                     mode="single"
                     selected={formData.endDate}
-                    onSelect={(date) => date && setFormData({...formData, endDate: date})}
+                    onSelect={(date) => date && setFormData({ ...formData, endDate: date })}
                     className="rounded-md border"
                   />
                 </div>
               </div>
 
               <div className="flex space-x-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setIsDialogOpen(false)}
                   disabled={isCreating}
                 >
                   Cancel
                 </Button>
-                <Button 
+                <Button
                   onClick={handleCreateBudget}
                   disabled={!formData.name || !formData.amount || !formData.category || isCreating}
                   className="flex-1"
@@ -315,7 +311,7 @@ export default function BudgetManagement({ userId, onBudgetUpdate }: BudgetManag
             const percentage = getProgressPercentage(budget.spent, budget.amount)
             const remaining = getRemaining(budget)
             const daysRemaining = getDaysRemaining(budget.endDate)
-            
+
             return (
               <Card key={budget.id} className="hover:shadow-md transition-shadow">
                 <CardHeader className="pb-3">
@@ -336,8 +332,8 @@ export default function BudgetManagement({ userId, onBudgetUpdate }: BudgetManag
                       <span>Spent: {formatCurrency(budget.spent, budget.currency)}</span>
                       <span>Budget: {formatCurrency(budget.amount, budget.currency)}</span>
                     </div>
-                    <Progress 
-                      value={percentage} 
+                    <Progress
+                      value={percentage}
                       className="h-2"
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
