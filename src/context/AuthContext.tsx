@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             localStorage.setItem('token', token)
             localStorage.setItem('user', JSON.stringify(userData))
 
-            router.push('/dashboard')
+            router.push('/')
         } catch (error) {
             console.error('Login failed:', error)
             throw error

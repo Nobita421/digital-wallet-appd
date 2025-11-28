@@ -28,14 +28,13 @@ export default function LoginPage() {
                 title: "Welcome back!",
                 description: "You have successfully logged in.",
             })
-            router.push('/')
+            // Navigation is handled by AuthContext
         } catch (error: any) {
             toast({
                 variant: "destructive",
                 title: "Login failed",
                 description: error.message || "Please check your credentials and try again.",
             })
-        } finally {
             setIsLoading(false)
         }
     }
